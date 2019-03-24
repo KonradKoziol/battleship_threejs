@@ -1,0 +1,1296 @@
+<html>
+<html lang="pl">
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title>Statki</title>
+	<style>
+		canvas {
+			width: 100%;
+			height: 100%
+		}
+	</style>
+	<style>
+		body {
+			color: #808080;
+			font-family: Monospace;
+			font-size: 13px;
+			text-align: center;
+
+			background-color: #000;
+			margin: 0px;
+			overflow: hidden;
+		}
+
+		#info {
+			position: absolute;
+			top: 0px;
+			width: 100%;
+			padding: 5px;
+			z-index: 100;
+		}
+
+		a {
+
+			color: #0080ff;
+		}
+
+		b {
+			color: lightgreen
+		}
+	</style>
+</head>
+
+<body>
+	<script src="./three.js"></script>
+	<script src="./KeyboardState.js"></script>
+	<script>
+
+		var blokadaKamery = true;
+
+		var iloscStatkow = [4];
+		var tmpX, tmpY;
+		var tx, ty;
+		var clicked;
+		var AlPlaced;
+		var KtoGra = 0//0-gracz;1-komputer
+
+		var LiczbaZastrzelonychWlasnychMasztow = 0;
+		var LiczbaZastrzelonychWrogichMasztow = 0;
+		var CzyZatopionyCalyStatek = 0;
+		var Tryb = 1;//1-wolny strzal||2-konkretny strzal
+		var tmp = [3];//pomocnicza
+		var CzyTrafil = 0;
+		var CzyMoznaGrac = 1;
+		var iteratorMrugania = 0;
+
+		var zapamietaneX, zapamietaneY;
+
+		zapamietaneX = 0;
+		zapamietaneY = 0;
+
+		var iteratorMasztow60 = 0;
+
+		//var materialTablicaMaszt;
+		var materialTablicaKropka;
+		var tablicaKlockowGracza;
+		var tablicaKlockowKomputera;
+
+		var kafelekBok = THREE.ImageUtils.loadTexture("images/bok.png");
+		var kafelekPusty = THREE.ImageUtils.loadTexture("images/pusty.png");
+		var kafelekMaszt = THREE.ImageUtils.loadTexture("images/maszt.png");
+		var kafelekKropka = THREE.ImageUtils.loadTexture("images/kropka.png");
+
+		var materialTablicaKratek;
+		var tablicaKratek;
+
+		var materialTablicaKratekKomputera;
+		var tablicaKratekKomputera;
+
+		var object;
+
+		var pozycjaKlockaDoObracania = 0;
+		var szybkoscObracania = 0;
+
+		var pozycjaKlockaGraczaDoObracania = 0;
+		var szybkoscObracaniaDlaPlanszyGracza = 0;
+
+		var pG = new PlanszaGracza();
+		var pAI = new PlanszaAI();
+		var pAIuzupelnienie = new PlanszaAI();
+
+		for (var i = 0; i < 10; i++)//zainicjowanie wart. 0
+		{
+			var tmpArray = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+			pAIuzupelnienie.PlanszaAI.Kratka[i] = tmpArray;
+		}
+		//pAIuzupelnienie.PlanszaAI.WypiszAll();
+
+		for (var kk = 0; kk < 4; kk++) {
+			iloscStatkow[kk] = 4 - kk;
+		}
+
+		for (var i = 0; i < 10; i++)//zainicjowanie wart. 0
+		{
+			var tmpArray = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+			pG.PlanszaG.Kratka[i] = tmpArray;
+		}
+
+		clicked = 0;
+		AlPlaced = 0;
+
+
+		materialTablicaMaszt = new Array();
+		materialTablicaMaszt.push(new THREE.MeshLambertMaterial({ map: kafelekBok }));
+		materialTablicaMaszt.push(new THREE.MeshLambertMaterial({ map: kafelekBok }));
+		materialTablicaMaszt.push(new THREE.MeshLambertMaterial({ map: kafelekBok }));
+		materialTablicaMaszt.push(new THREE.MeshLambertMaterial({ map: kafelekBok }));
+		materialTablicaMaszt.push(new THREE.MeshLambertMaterial({ map: kafelekPusty }));//front
+		materialTablicaMaszt.push(new THREE.MeshLambertMaterial({ map: kafelekMaszt }));//tyl
+		var MovingCubeMatMaszt = new THREE.MeshFaceMaterial(materialTablicaMaszt);
+		var MovingCubeGeomMaszt = new THREE.CubeGeometry(0.188, 0.188, 0.06, 1, 1, 1, materialTablicaMaszt);
+
+		materialTablicaKropka = new Array();
+		materialTablicaKropka.push(new THREE.MeshLambertMaterial({ map: kafelekBok }));
+		materialTablicaKropka.push(new THREE.MeshLambertMaterial({ map: kafelekBok }));
+		materialTablicaKropka.push(new THREE.MeshLambertMaterial({ map: kafelekBok }));
+		materialTablicaKropka.push(new THREE.MeshLambertMaterial({ map: kafelekBok }));
+		materialTablicaKropka.push(new THREE.MeshLambertMaterial({ map: kafelekPusty }));//front
+		materialTablicaKropka.push(new THREE.MeshLambertMaterial({ map: kafelekKropka }));//tyl
+		var MovingCubeMatKropka = new THREE.MeshFaceMaterial(materialTablicaKropka);
+		var MovingCubeGeomKropka = new THREE.CubeGeometry(0.188, 0.188, 0.06, 1, 1, 1, materialTablicaKropka);
+
+
+		function BresenhamLine(x1, y1, x2, y2, wybor, Wartosc)//wybor=0-stan poczatkowy|1-zaznacza|2-sprawdza czy mozna stawiac statki|3-ustawia statki
+		{
+			// zmienne pomocnicze
+			var d, dx, dy, ai, bi, xi, yi;
+			var x = x1, y = y1;
+			// ustalenie kierunku rysowania
+			if (x1 < x2) {
+				xi = 1;
+				dx = x2 - x1;
+			}
+			else {
+				xi = -1;
+				dx = x1 - x2;
+			}
+			// ustalenie kierunku rysowania
+			if (y1 < y2) {
+				yi = 1;
+				dy = y2 - y1;
+			}
+			else {
+				yi = -1;
+				dy = y1 - y2;
+			}
+			// pierwszy piksel
+			if (wybor == 0) {//wybor=0-stan poczatkowy|1-zaznacza|2-sprawdza czy mozna stawiac statki|3-rysuje potencjalne ustawienie
+				if (pG.PlanszaG.Kratka[y][x] == 1) {
+					materialTablicaKratek[x + y * 10].color.setHex(0xff9c00);
+				}
+				else if (pG.PlanszaG.Kratka[y][x] == 2) {
+					materialTablicaKratek[x + y * 10].color.setHex(0xffffff);
+				}//*/
+				else if (pG.PlanszaG.Kratka[y][x] == 0) {
+					materialTablicaKratek[x + y * 10].color.setHex(0xffffff);
+				}
+			}
+			else if (wybor == 1) {
+				materialTablicaKratek[x + y * 10].color.setHex(0xff9c00);
+				pG.PlanszaG.Pieczatka(y, x);
+				pG.PlanszaG.Kratka[y][x] = 1;
+			}
+			else if (wybor == 2) {
+				if ((x != tmpY && y != tmpX) || Math.abs(tmpY - x + tmpX - y) >= 4 || pG.PlanszaG.Kratka[y][x] == 1 || pG.PlanszaG.Kratka[y][x] == 2) {
+					return false;
+				}
+			}
+			else if (wybor == 3) {
+				materialTablicaKratek[x + y * 10].color.setHex(Wartosc);
+			}
+			// oś wiodąca OX
+			if (dx > dy) {
+				ai = (dy - dx) * 2;
+				bi = dy * 2;
+				d = bi - dx;
+				// pętla po kolejnych x
+				while (x != x2) {
+					// test współczynnika
+					if (d >= 0) {
+						x += xi;
+						y += yi;
+						d += ai;
+					}
+					else {
+						d += bi;
+						x += xi;
+					}
+
+					if (wybor == 0) {//wybor=0-stan poczatkowy|1-zaznacza|2-sprawdza czy mozna stawiac statki|3-rysuje potencjalne ustawienie
+						if (pG.PlanszaG.Kratka[y][x] == 1) {
+							materialTablicaKratek[x + y * 10].color.setHex(0xff9c00);
+						}
+						else if (pG.PlanszaG.Kratka[y][x] == 2) {
+							materialTablicaKratek[x + y * 10].color.setHex(0xffffff);
+						}//*/
+						else if (pG.PlanszaG.Kratka[y][x] == 0) {
+							materialTablicaKratek[x + y * 10].color.setHex(0xffffff);
+						}
+					}
+					else if (wybor == 1) {
+						materialTablicaKratek[x + y * 10].color.setHex(0xff9c00);
+						pG.PlanszaG.Pieczatka(y, x);
+						pG.PlanszaG.Kratka[y][x] = 1;
+					}
+					else if (wybor == 2) {
+						if ((x != tmpY && y != tmpX) || Math.abs(tmpY - x + tmpX - y) >= 4 || pG.PlanszaG.Kratka[y][x] == 1 || pG.PlanszaG.Kratka[y][x] == 2) {
+							return false;
+						}
+					}
+					else if (wybor == 3) {
+						materialTablicaKratek[x + y * 10].color.setHex(Wartosc);
+					}
+
+				}
+			}
+			// oś wiodąca OY
+			else {
+				ai = (dx - dy) * 2;
+				bi = dx * 2;
+				d = bi - dy;
+				// pętla po kolejnych y
+				while (y != y2) {
+					// test współczynnika
+					if (d >= 0) {
+						x += xi;
+						y += yi;
+						d += ai;
+					}
+					else {
+						d += bi;
+						y += yi;
+					}
+
+					if (wybor == 0) {//wybor=0-stan poczatkowy|1-zaznacza|2-sprawdza czy mozna stawiac statki|3-rysuje potencjalne ustawienie
+						if (pG.PlanszaG.Kratka[y][x] == 1) {
+							materialTablicaKratek[x + y * 10].color.setHex(0xff9c00);
+						}
+						else if (pG.PlanszaG.Kratka[y][x] == 2) {
+							materialTablicaKratek[x + y * 10].color.setHex(0xffffff);
+						}//*/
+						else if (pG.PlanszaG.Kratka[y][x] == 0) {
+							materialTablicaKratek[x + y * 10].color.setHex(0xffffff);
+						}
+					}
+					else if (wybor == 1) {
+						materialTablicaKratek[x + y * 10].color.setHex(0xff9c00);
+						pG.PlanszaG.Pieczatka(y, x);
+						pG.PlanszaG.Kratka[y][x] = 1;
+					}
+					else if (wybor == 2) {
+						if ((x != tmpY && y != tmpX) || Math.abs(tmpY - x + tmpX - y) >= 4 || pG.PlanszaG.Kratka[y][x] == 1 || pG.PlanszaG.Kratka[y][x] == 2) {
+							return false;
+						}
+					}
+					else if (wybor == 3) {
+						materialTablicaKratek[x + y * 10].color.setHex(Wartosc);
+					}
+
+				}
+			}
+		}
+		//////////////////////////////////////////////////////////////		
+		function Plansza() {
+			this.Kratka = [10];
+			for (var i = 0; i < 10; i++)//zainicjowanie wart. 0
+			{
+				var tmpArray = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+				this.Kratka[i] = tmpArray;
+			}
+			this.Pieczatka = function (_y, _x) {
+				for (var i = 0; i < 3; i++) {
+					for (var j = 0; j < 3; j++) {
+						if (_y - 1 + i >= 0 && _y - 1 + i <= 9 && _x - 1 + j >= 0 && _x - 1 + j <= 9)//warunek ab_y indeks_y nie w_yszl_y poza tablice
+						{
+							if (this.Kratka[_y - 1 + i][_x - 1 + j] != 1 && this.Kratka[_y - 1 + i][_x - 1 + j] != 3) {
+								if (_y - 1 + i != _y || _x - 1 + j != _x)
+									this.Kratka[_y - 1 + i][_x - 1 + j] = 2;
+							}
+						}
+					}
+				}
+			}
+			this.UsunWszystkiePieczatki = function () {
+				for (var i = 0; i < 10; i++) {
+					for (var j = 0; j < 10; j++) {
+						if (this.Kratka[i][j] == 2)
+							this.Kratka[i][j] = 0;
+					}
+				}
+
+			}
+			this.Wypisz = function (_y, _x) {
+				alert(this.Kratka[_y][_x])
+			}
+			this.WypiszAll = function () {
+				alert(
+					this.Kratka[0] + "\n" +
+					this.Kratka[1] + "\n" +
+					this.Kratka[2] + "\n" +
+					this.Kratka[3] + "\n" +
+					this.Kratka[4] + "\n" +
+					this.Kratka[5] + "\n" +
+					this.Kratka[6] + "\n" +
+					this.Kratka[7] + "\n" +
+					this.Kratka[8] + "\n" +
+					this.Kratka[9] + "\n"
+				)
+			}
+		}
+		///////////////////////////////////////
+		function PlanszaGracza() {
+			this.PlanszaG = new Plansza();
+			this.TablicaMozliwychStrzalow = [4];
+			for (var i = 0; i < 4; i++)//zainicjowanie wart. 0
+			{
+				var tmpArray = [-1, -1];
+				this.TablicaMozliwychStrzalow[i] = tmpArray;
+			}
+
+			this.PolPieczatka = function (_y, _x) {
+
+				for (var i = 0; i < 3; i++) {
+					for (var j = 0; j < 3; j++) {
+						if (_y - 1 + i >= 0 && _y - 1 + i <= 9 && _x - 1 + j >= 0 && _x - 1 + j <= 9)//warunek ab_y indeks_y nie w_yszl_y poza tablice
+						{
+							if (this.PlanszaG.Kratka[_y - 1 + i][_x - 1 + j] != 1) {
+								if (_y - 1 + i != _y && _x - 1 + j != _x)
+									this.PlanszaG.Kratka[_y - 1 + i][_x - 1 + j] = 2;
+							}
+						}
+					}
+				}
+			}
+			this.UzupelnijTablicaMozliwychStrzalow = function (_y, _x) {
+
+				var ij = 0;;//indeks_y tablic_y mozliw_ych strzalow
+				for (var i = 0; i < 3; i++) {
+					for (var j = 0; j < 3; j++) {
+						if (_y - 1 + i >= 0 && _y - 1 + i <= 9 && _x - 1 + j >= 0 && _x - 1 + j <= 9)//warunek ab_y indeks_y nie w_yszl_y poza tablice
+						{
+							if ((_y - 1 + i != _y || _x - 1 + j != _x) && (_y - 1 + i == _y || _x - 1 + j == _x)) {
+								//Kratka[_y-1+i][_x-1+j].ZmienStan(4);//pomocnicze
+								this.TablicaMozliwychStrzalow[ij][0] = _y - 1 + i;
+								this.TablicaMozliwychStrzalow[ij][1] = _x - 1 + j;
+								ij++;
+							}
+						}
+					}
+				}
+
+			}
+
+			this.StrzalWMozliwychStrzalachAI = function () {
+
+				var ij;
+				var tmpTab = [2]
+
+				for (; ;) {
+					ij = Math.round(Math.random() * 3);
+					if (
+						this.TablicaMozliwychStrzalow[ij][0] != -1 &&
+						this.TablicaMozliwychStrzalow[ij][1] != -1 &&
+						this.PlanszaG.Kratka[this.TablicaMozliwychStrzalow[ij][0]][this.TablicaMozliwychStrzalow[ij][1]] != 2 &&
+						this.PlanszaG.Kratka[this.TablicaMozliwychStrzalow[ij][0]][this.TablicaMozliwychStrzalow[ij][1]] != 3) {
+						tmpTab[0] = this.TablicaMozliwychStrzalow[ij][0];
+						tmpTab[1] = this.TablicaMozliwychStrzalow[ij][1];
+						break;
+					}
+				}
+				return tmpTab;
+			}
+			this.DowolnyLosowyStrzalAI = function () {
+
+				var tmpTab = [3];
+
+				for (; ;)//losowanie pola(sensownego)
+				{
+					tmpTab[0] = Math.round(Math.random() * 9);
+					tmpTab[1] = Math.round(Math.random() * 9);
+					if (this.PlanszaG.Kratka[tmpTab[0]][tmpTab[1]] != 2 && this.PlanszaG.Kratka[tmpTab[0]][tmpTab[1]] != 3)
+						break;
+				}
+				if (this.PlanszaG.Kratka[tmpTab[0]][tmpTab[1]] == 1) {
+					this.PlanszaG.Kratka[tmpTab[0]][tmpTab[1]] = 3;
+					this.PolPieczatka(tmpTab[0], tmpTab[1]);
+					this.UzupelnijTablicaMozliwychStrzalow(tmpTab[0], tmpTab[1]);
+					tmpTab[2] = 1;
+					return tmpTab;
+				}
+				tmpTab[2] = 0;
+				return tmpTab;
+
+			}
+			this.SprawdzCzyOtoczenieMaMaszty = function (_y, _x) {
+
+				for (var i = 0; i < 3; i++) {
+					for (var j = 0; j < 3; j++) {
+						if (_y - 1 + i >= 0 && _y - 1 + i <= 9 && _x - 1 + j >= 0 && _x - 1 + j <= 9)//warunek ab_y indeks_y nie w_yszl_y poza tablice
+						{
+							if (this.PlanszaG.Kratka[_y - 1 + i][_x - 1 + j] == 1) {
+								if (_y - 1 + i != _y || _x - 1 + j != _x)
+									return 1;
+							}
+						}
+					}
+				}
+				return 0;
+
+			}
+
+			this.SprawdzCzyWWMozliwychStrzalachAISaJeszczeJakiesStatki = function () {
+				for (var ij = 0; ij < 4; ij++) {
+					if (this.TablicaMozliwychStrzalow[ij][0] >= 0 && this.TablicaMozliwychStrzalow[ij][0] <= 9 && this.TablicaMozliwychStrzalow[ij][1] >= 0 && this.TablicaMozliwychStrzalow[ij][1] <= 9) {
+						if (this.PlanszaG.Kratka[this.TablicaMozliwychStrzalow[ij][0]][this.TablicaMozliwychStrzalow[ij][1]] == 1)
+							return 1;
+					}
+				}
+				return 0;
+			}
+			this.ZerujTablicaMozliwychStrzalow = function () {
+
+				for (var i = 0; i < 4; i++) {
+					var tmpArray = [-1, -1];
+					this.TablicaMozliwychStrzalow[i] = tmpArray;
+				}
+			}
+
+			this.ZwrocIndeksMozliwegoStrzalu = function (_y, _x) {
+
+				for (var i = 0; i < 4; i++) //wart poczatkowe(-1)
+				{
+					if (this.TablicaMozliwychStrzalow[i][1] == _x && this.TablicaMozliwychStrzalow[i][0] == _y)
+						return i;
+				}
+				return -1;//nie ma takiej wartosci (indeksu)
+
+			}
+			this.ZnajdzTrafionegoSasiada = function (_y, _x) {
+
+				var tmpTab = [3];
+
+				if (_y - 1 >= 0) {
+					if (this.PlanszaG.Kratka[_y - 1][_x] == 3) {
+						tmpTab[0] = _y - 1;
+						tmpTab[1] = _x;
+						tmpTab[2] = 1;
+						return tmpTab;
+					}
+				}
+				if (_x - 1 >= 0) {
+					if (this.PlanszaG.Kratka[_y][_x - 1] == 3) {
+						tmpTab[0] = _y;
+						tmpTab[1] = _x - 1;
+						tmpTab[2] = 1;
+						return tmpTab;
+					}
+				}
+				if (_x + 1 <= 9) {
+					if (this.PlanszaG.Kratka[_y][_x + 1] == 3) {
+						tmpTab[0] = _y;
+						tmpTab[1] = _x + 1;
+						tmpTab[2] = 1;
+						return tmpTab;
+					}
+				}
+				if (_y + 1 <= 9) {
+					if (this.PlanszaG.Kratka[_y + 1][_x] == 3) {
+						tmpTab[0] = _y + 1;
+						tmpTab[1] = _x;
+						tmpTab[2] = 1;
+						return tmpTab;
+					}
+				}
+				return tmpTab;//wkolo nie ma trafionego sasiada
+			}
+
+
+
+			this.SprawdzStrzalZmienWartosci = function (_y, _x) {
+				var xx = _x;
+				var yy = _y;
+				this.PlanszaG.Kratka[_y][_x] = 3;
+				this.PolPieczatka(_y, _x);
+				var indexSSZW = this.ZwrocIndeksMozliwegoStrzalu(_y, _x);
+				if (indexSSZW != (-1)) {
+					var tmpSSZW = [3];
+					tmpSSZW = this.ZnajdzTrafionegoSasiada(yy, xx);
+					yy = tmpSSZW[0];
+					xx = tmpSSZW[1];
+
+					if (tmpSSZW[2] == 1) {
+						this.TablicaMozliwychStrzalow[indexSSZW][0] = 2 * _y - yy;
+						this.TablicaMozliwychStrzalow[indexSSZW][1] = 2 * _x - xx;//przesuwa pole do sprawdzenia
+					}
+					else {
+						alert("Nie ma trafionego sasiada![cos nie tak]");//testowe
+					}
+				}
+				else
+					alert("Nie ma takiej wartosci![ZwrocIndeksMozliwegoStrzalu]");
+
+			}
+			this.UzupelijPustymiTablicaMozliwychStrzalow = function () {
+				for (var i = 0; i < 4; i++) {
+					if (this.TablicaMozliwychStrzalow[i][0] >= 0 && this.TablicaMozliwychStrzalow[i][0] <= 9 && this.TablicaMozliwychStrzalow[i][1] >= 0 && this.TablicaMozliwychStrzalow[i][1] <= 9) {
+						this.PlanszaG.Kratka[this.TablicaMozliwychStrzalow[i][0]][this.TablicaMozliwychStrzalow[i][1]] = 2;
+
+					}
+				}
+			}
+		}
+
+
+		function PlanszaAI() {
+			this.PlanszaAI = new Plansza();
+			this.TablicaStatkow = [10];
+			this.il = 0;//pomocnicza
+
+			for (var i = 0; i < 10; i++)//zainicjowanie wart. 0
+			{
+				var tmpArray = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+				this.PlanszaAI.Kratka[i] = tmpArray;
+			}
+
+			this.DodajStatkiMasztowe = function (m) {//m - ilosc masztow
+
+				var _x, _y, w_ybor;
+				var JestW_ybran_y;//flaga
+				var PolaSaOK;//flaga
+				for (var j = 0; j < 5 - m; j++)//zaznacza statki na plansz_y
+				{
+					var tmpArray02 = [m];
+					for (var kk = 0; kk < m; kk++) {
+						var tmpArray01 = [-1, -1];
+						tmpArray02[kk] = tmpArray01;
+					}
+					this.TablicaStatkow[this.il] = tmpArray02;
+
+					JestW_ybran_y = 0;
+					while (!JestW_ybran_y) {
+
+						var w_ybor = Math.round(Math.random());//losujem_y pion(1) lub poziom(0)
+						if (w_ybor == 0) {
+							_y = Math.round(Math.random() * 9);
+							_x = Math.round(Math.random() * (6 + 4 - m));
+						}
+						else {
+							_x = Math.round(Math.random() * 9);
+							_y = Math.round(Math.random() * (6 + 4 - m));
+						}
+
+						PolaSaOK = 1;
+						for (var i = 0; i < m; i++)//sprawdza cz_y w w_ylosowan_ym miejscu mozna postawic statek
+						{
+
+							if (this.PlanszaAI.Kratka[_y + (i * w_ybor)][_x + (i * (1 - w_ybor))] == 1 || this.PlanszaAI.Kratka[_y + i * w_ybor][_x + i * (1 - w_ybor)] == 2) {
+								PolaSaOK = 0;
+								break;
+							}//*/
+
+						}
+						if (PolaSaOK) {
+
+
+							for (var i = 0; i < m; i++)//zaznacza maszt_y na plansz_y
+							{
+
+								this.PlanszaAI.Kratka[_y + i * w_ybor][_x + i * (1 - w_ybor)] = 1;
+								this.PlanszaAI.Pieczatka(_y + i * w_ybor, _x + i * (1 - w_ybor));//robi ramke
+								JestW_ybran_y = 1;
+
+								this.TablicaStatkow[this.il][i][0] = _y + i * w_ybor;
+								this.TablicaStatkow[this.il][i][1] = _x + i * (1 - w_ybor);
+
+							}
+
+						}
+						else {
+							JestW_ybran_y = 0;
+						}
+
+					}
+					this.il++;
+				}
+
+
+			}
+
+			this.UzupelnijLosowymi = function () {
+
+				this.DodajStatkiMasztowe(1);//od razu wie ile jets ktorych statkow
+				this.DodajStatkiMasztowe(2);
+				this.DodajStatkiMasztowe(3);
+				this.DodajStatkiMasztowe(4);
+
+				this.PlanszaAI.UsunWszystkiePieczatki();
+			}
+			this.ZwrocIndeksStatkuZTablicaStatkow = function (_y, _x) {
+
+				for (var i = 0; i < this.TablicaStatkow.length; i++) {
+					for (var j = 0; j < this.TablicaStatkow[i].length; j++) {
+						if (_x == this.TablicaStatkow[i][j][1] && _y == this.TablicaStatkow[i][j][0])
+							return i;
+					}
+
+				}
+				return -1;//cos musi zwrocic
+			}
+			this.CoToZaStatek = function (_y, _x) {
+				for (var i = 0; i < this.TablicaStatkow.length; i++) {
+					for (var j = 0; j < this.TablicaStatkow[i].length; j++) {
+						if (_x == this.TablicaStatkow[i][j][1] && _y == this.TablicaStatkow[i][j][0]) {
+							return this.TablicaStatkow[i].length;
+						}
+					}
+				}
+				return 0;
+
+			}
+		}
+
+
+
+		/////////////////////////////////////////////////////////////////////
+		///////////////////////////three.js//////////////////////////////////
+		/////////////////////////////////////////////////////////////////////	
+		var keyboard = new KeyboardState();
+		var scene = new THREE.Scene();
+		var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 20000);
+		camera.position.z = 6;
+
+		var mouseX = 0, mouseY = 0;
+		var windowHalfX = window.innerWidth / 2;
+		var windowHalfY = window.innerHeight / 2;
+
+
+		var renderer = new THREE.WebGLRenderer();
+		renderer.setSize(window.innerWidth, window.innerHeight);
+		document.body.appendChild(renderer.domElement);
+
+
+		hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.6);
+		hemiLight.color.setHSL(0.6, 1, 0.6);
+		hemiLight.groundColor.setHSL(0.095, 1, 0.75);
+		hemiLight.position.set(0, 500, 0);
+		scene.add(hemiLight);
+
+
+		var ambient = new THREE.AmbientLight(0xffffff);
+		ambient.color.setHSL(0.1, 0.3, 0.2);
+		scene.add(ambient);
+
+
+		var skyGeometry = new THREE.CubeGeometry(5000, 5000, 5000);
+		var materialArray = [];
+		var skyboxMAterial = new THREE.MeshBasicMaterial({
+			map: THREE.ImageUtils.loadTexture("images/skybox.jpg"),
+			side: THREE.BackSide
+		});
+		for (var i = 0; i < 6; i++)
+			materialArray.push(skyboxMAterial);
+		var skyMaterial = new THREE.MeshFaceMaterial(materialArray);
+		var skyBox = new THREE.Mesh(skyGeometry, skyMaterial);
+		scene.add(skyBox);
+
+
+		var container = document.createElement('div');
+		document.body.appendChild(container);
+		window.addEventListener('resize', onWindowResize, false);
+		document.addEventListener('mousemove', onDocumentMouseMove, false);
+
+
+		function onWindowResize() {
+
+			windowHalfX = window.innerWidth / 2;
+			windowHalfY = window.innerHeight / 2;
+
+			camera.aspect = window.innerWidth / window.innerHeight;
+
+			camera.updateProjectionMatrix();
+
+			renderer.setSize(window.innerWidth, window.innerHeight);
+
+		}
+		function onDocumentMouseMove(event) {
+
+			mouseX = event.clientX - windowHalfX;
+			mouseY = event.clientY - windowHalfY / 1.4;
+
+		}
+
+
+		init();
+		animate();
+		alert("Rozstaw swoje statki używając odpowiednio klawiszy: STRZAŁKA W GÓRĘ, W DÓŁ, W LEWO, W PRAWO.\nWybór potwierdź klawiszem SPACJA.");
+
+
+		function RozstawStatkiKomputera() {
+			pAI.UzupelnijLosowymi();
+
+
+
+			tablicaKlockowKomputera = new Array();
+			for (var j = 0; j < 10; j++) {
+				for (var i = 0; i < 10; i++) {
+
+					if (pAI.PlanszaAI.Kratka[j][i] == 1) {
+						var klocek = new THREE.Mesh(MovingCubeGeomMaszt, MovingCubeMatMaszt);
+					}
+					else {
+						var klocek = new THREE.Mesh(MovingCubeGeomKropka, MovingCubeMatKropka);
+					}
+					klocek.position.set(0.475, 1.595, -0.035);
+					klocek.position.y = 1.595 - j * 0.195;
+					klocek.position.x = 0.475 + i * 0.1955;
+					klocek.receiveShadow = true;
+					klocek.castShadow = true;
+					tablicaKlockowKomputera.push(klocek);
+					scene.add(tablicaKlockowKomputera[i + j * 10]);
+
+				}
+			}
+
+
+
+		}
+
+		////////////////////////////////////////////////////////////////////////
+		function DotajKlockiGracza() {
+
+
+			tablicaKlockowGracza = new Array();
+			for (var j = 0; j < 10; j++) {
+				for (var i = 0; i < 10; i++) {
+
+					if (pG.PlanszaG.Kratka[j][i] == 1) {
+						var klocek = new THREE.Mesh(MovingCubeGeomMaszt, MovingCubeMatMaszt);
+					}
+					else {
+						var klocek = new THREE.Mesh(MovingCubeGeomKropka, MovingCubeMatKropka);
+					}
+					klocek.position.set(-2.27, 1.595, -0.035);
+					klocek.position.y = 1.595 - j * 0.195;
+					klocek.position.x = -2.27 + i * 0.1955;
+					klocek.receiveShadow = true;
+					klocek.castShadow = true;
+					tablicaKlockowGracza.push(klocek);
+					scene.add(tablicaKlockowGracza[i + j * 10]);
+
+				}
+			}
+
+		}
+
+		function SchowajKafelki(bool) {
+
+			for (var j = 0; j < 10; j++) {
+				for (var i = 0; i < 10; i++) {
+					if (bool)
+						materialTablicaKratek[i + j * 10].opacity = 0;
+					else
+						materialTablicaKratek[i + j * 10].opacity = 0.3;
+				}
+			}
+
+		}
+
+		function init() {
+
+			var geometry2 = new THREE.Geometry();
+
+			for (var i = 0; i < 10000; i++) {
+
+				var vertex = new THREE.Vector3();
+				vertex.x = THREE.Math.randFloatSpread(2000);
+				vertex.y = THREE.Math.randFloatSpread(2000);
+				vertex.z = THREE.Math.randFloatSpread(2000);
+
+				if (vertex.z < 100 && vertex.y > 100 && vertex.x < 0)
+					geometry2.vertices.push(vertex);
+
+			}
+
+			var particles = new THREE.ParticleSystem(geometry2, new THREE.ParticleSystemMaterial({ color: 0x888888 }));
+			scene.add(particles);
+
+
+			var geometry = new THREE.CubeGeometry(1, 1, 1);
+			var mesh;
+
+
+
+			var loader = new THREE.JSONLoader();
+			loader.load("./models/scene_model.js", function (geometry, materialss) {
+				var materialsss = new THREE.MeshFaceMaterial(materialss);
+				object = new THREE.Mesh(geometry, materialsss);
+
+				object.scale.set(1, 1, 1);
+				object.receiveShadow = true;
+				object.castShadow = true;
+				scene.add(object);
+
+			});
+
+
+
+			var floorGeometry = new THREE.PlaneGeometry(0.18, 0.18, 10, 10);
+
+
+
+			materialTablicaKratek = new Array();
+			tablicaKratek = new Array();
+
+
+			for (var j = 0; j < 10; j++) {
+				for (var i = 0; i < 10; i++) {
+					materialTablicaKratek.push(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 }))
+					var floor = new THREE.Mesh(floorGeometry, materialTablicaKratek[i + j * 10]);
+					floor.position.y = 1.595 - j * 0.195;
+					floor.position.x = -2.27 + i * 0.1955;
+					tablicaKratek.push(floor);
+					scene.add(tablicaKratek[i + j * 10]);
+				}
+			}
+
+
+			materialTablicaKratekKomputera = new Array();
+			tablicaKratekKomputera = new Array();
+
+
+			for (var j = 0; j < 10; j++) {
+				for (var i = 0; i < 10; i++) {
+					materialTablicaKratekKomputera.push(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 }))
+					var floor = new THREE.Mesh(floorGeometry, materialTablicaKratekKomputera[i + j * 10]);
+					floor.position.y = 1.595 - j * 0.195;
+					floor.position.x = 0.475 + i * 0.1955;
+					tablicaKratekKomputera.push(floor);
+					scene.add(tablicaKratekKomputera[i + j * 10]);
+				}
+			}
+
+
+			/////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+			RozstawStatkiKomputera();
+			najechanieKafelka();
+
+		}
+
+
+		function animate() {
+			requestAnimationFrame(animate);
+
+			if (!blokadaKamery) {
+				if (camera.position.x >= -0.2 && mouseX <= window.innerWidth / 64 || camera.position.x <= 0.2 && mouseX >= window.innerWidth / 64)
+					camera.position.x += (mouseX - camera.position.x) * 0.000008;
+			}
+
+			if (tablicaKlockowKomputera[pozycjaKlockaDoObracania].rotation.y < Math.PI)
+				tablicaKlockowKomputera[pozycjaKlockaDoObracania].rotation.y += szybkoscObracania;
+
+			if (AlPlaced == 1) {
+				if (tablicaKlockowGracza[pozycjaKlockaGraczaDoObracania].rotation.y < Math.PI)
+					tablicaKlockowGracza[pozycjaKlockaGraczaDoObracania].rotation.y += szybkoscObracaniaDlaPlanszyGracza;
+			}
+
+
+			camera.lookAt(scene.position);
+
+
+			render();
+			update();
+		}
+
+		function update() {
+			keyboard.update();
+
+
+			if (keyboard.down("V")) {
+				blokadaKamery = false;
+			}
+			if (keyboard.up("V")) {
+				blokadaKamery = true;
+
+			}
+
+
+			if (keyboard.down("down")) {//blokadaKamery
+				if (AlPlaced != 1) {
+					zjechanieKafelka();
+
+					zapamietaneY++;
+					zapamietaneY = zapamietaneY % 10;
+
+					najechanieKafelka();
+				}
+				else if (AlPlaced == 1 && KtoGra == 0 && CzyMoznaGrac == 1) {
+					materialTablicaKratekKomputera[zapamietaneX + zapamietaneY * 10].opacity = 0;
+
+					zapamietaneY++;
+					zapamietaneY = zapamietaneY % 10;
+
+					najechanieKafelkaAI();
+
+				}
+
+			}
+
+			if (keyboard.down("up")) {
+				if (AlPlaced != 1) {
+					zjechanieKafelka();
+
+					zapamietaneY--;
+					zapamietaneY += 10;
+					zapamietaneY = zapamietaneY % 10;
+
+					najechanieKafelka();
+				}
+				else if (AlPlaced == 1 && KtoGra == 0 && CzyMoznaGrac == 1) {
+					materialTablicaKratekKomputera[zapamietaneX + zapamietaneY * 10].opacity = 0;
+
+					zapamietaneY--;
+					zapamietaneY += 10;
+					zapamietaneY = zapamietaneY % 10;
+
+					najechanieKafelkaAI();
+
+				}
+			}
+
+			if (keyboard.down("right")) {
+				if (AlPlaced != 1) {
+					zjechanieKafelka();
+
+					zapamietaneX++;
+					zapamietaneX = zapamietaneX % 10;
+
+					najechanieKafelka();
+				}
+				else if (AlPlaced == 1 && KtoGra == 0 && CzyMoznaGrac == 1) {
+					materialTablicaKratekKomputera[zapamietaneX + zapamietaneY * 10].opacity = 0;
+
+					zapamietaneX++;
+					zapamietaneX = zapamietaneX % 10;
+
+					najechanieKafelkaAI();
+
+				}
+
+			}
+			if (keyboard.down("left")) {
+				if (AlPlaced != 1) {
+					zjechanieKafelka();
+
+					zapamietaneX--;
+					zapamietaneX += 10;
+					zapamietaneX = zapamietaneX % 10;
+
+					najechanieKafelka();
+				}
+				else if (AlPlaced == 1 && KtoGra == 0 && CzyMoznaGrac == 1) {
+					materialTablicaKratekKomputera[zapamietaneX + zapamietaneY * 10].opacity = 0;
+
+					zapamietaneX--;
+					zapamietaneX += 10;
+					zapamietaneX = zapamietaneX % 10;
+
+					najechanieKafelkaAI();
+
+				}
+
+			}
+			if (keyboard.down("space")) {
+				if (AlPlaced != 1) {
+					klikniecieKafelka();
+				}
+				else if (AlPlaced == 1 && KtoGra == 0 && CzyMoznaGrac == 1) {
+					klikniecieKafelkaAI();
+				}
+
+			}
+
+			if (keyboard.down("S")) {
+				if (AlPlaced == 1)
+					SchowajKafelki(false);
+			}
+			if (keyboard.up("S")) {
+				if (AlPlaced == 1)
+					SchowajKafelki(true);
+			}
+
+
+
+
+		}
+		function pokazStatkiWroga() {
+
+			for (var j = 0; j < 10; j++) {
+				for (var i = 0; i < 10; i++) {
+					materialTablicaKratekKomputera[i + j * 10].opacity = 0.3;
+					if (pAI.PlanszaAI.Kratka[j][i] == 1) {
+						materialTablicaKratekKomputera[i + j * 10].color.setHex(0xff9c00);//p
+					}
+					else {
+						materialTablicaKratekKomputera[i + j * 10].color.setHex(0xffffff);//b
+					}
+
+
+				}
+			}
+
+		}
+		function RuchKomputera() {
+			CzyMoznaGrac = 0;
+			if (LiczbaZastrzelonychWlasnychMasztow >= 20) {
+				alert("PRZEGRALEŚ!" + "\n" + "Zastrzelono wszystkie Twoje statki!");
+				pokazStatkiWroga();
+			}
+			else {
+				if (Tryb == 1) {
+					tmp = pG.DowolnyLosowyStrzalAI();//losuje strzal
+
+					if (tmp[2] == 1 && pG.SprawdzCzyOtoczenieMaMaszty(tmp[0], tmp[1]) == 1) {
+						LiczbaZastrzelonychWlasnychMasztow++;
+						CzyTrafil = 1;
+						Tryb = 0;
+
+					}
+					else if (tmp[2] == 1 && pG.SprawdzCzyOtoczenieMaMaszty(tmp[0], tmp[1]) == 0)//trafiony jednomasztowiec
+					{
+						LiczbaZastrzelonychWlasnychMasztow++;
+						CzyTrafil = 1;
+						pG.PlanszaG.Pieczatka(tmp[0], tmp[1]);
+						Tryb = 1;
+					}
+					else if (tmp[2] == 0) {
+						CzyTrafil = 0;
+						pG.PlanszaG.Kratka[tmp[0]][tmp[1]] = 2;
+						Tryb = 1;
+
+
+					}
+
+				}
+				else if (Tryb == 0) {
+					if (pG.SprawdzCzyWWMozliwychStrzalachAISaJeszczeJakiesStatki() == 1) {
+
+						tmp = pG.StrzalWMozliwychStrzalachAI();//losuje strzal
+						if (pG.PlanszaG.Kratka[tmp[0]][tmp[1]] == 1) {
+							LiczbaZastrzelonychWlasnychMasztow++;
+							CzyTrafil = 1;
+							pG.SprawdzStrzalZmienWartosci(tmp[0], tmp[1]);
+
+							if (pG.SprawdzCzyWWMozliwychStrzalachAISaJeszczeJakiesStatki() != 1) {
+								pG.UzupelijPustymiTablicaMozliwychStrzalow();//zaznacza pola gdzie na pewno nie ma statkow(koncowe zaznaczanie)
+								pG.ZerujTablicaMozliwychStrzalow();
+								Tryb = 1;
+							}
+
+						}
+						else if (pG.PlanszaG.Kratka[tmp[0]][tmp[1]] == 0) {
+							pG.PlanszaG.Kratka[tmp[0]][tmp[1]] = 2;
+							CzyTrafil = 0;
+						}
+					}
+					else {
+						pG.UzupelijPustymiTablicaMozliwychStrzalow();//zaznacza pola gdzie na pewno nie ma statkow(koncowe zaznaczanie)
+						pG.ZerujTablicaMozliwychStrzalow();
+						Tryb = 1;
+
+
+					}
+
+				}
+
+				pozycjaKlockaGraczaDoObracania = tmp[1] + tmp[0] * 10;
+				szybkoscObracaniaDlaPlanszyGracza = Math.PI / 20;//
+				if (CzyTrafil == 1) {
+
+					var taa = setTimeout(function () { RuchKomputera() }, 1000);
+				}
+				else {
+					CzyMoznaGrac = 1;
+					materialTablicaKratekKomputera[zapamietaneX + zapamietaneY * 10].color.setHex(0xffffff);//c				
+					KtoGra = 0;
+				}
+
+
+			}
+
+		}
+
+
+		function najechanieKafelkaAI() {
+			materialTablicaKratekKomputera[zapamietaneX + zapamietaneY * 10].opacity = 0.2;
+
+			if (pAIuzupelnienie.PlanszaAI.Kratka[zapamietaneY][zapamietaneX] != 0) {
+				materialTablicaKratekKomputera[zapamietaneX + zapamietaneY * 10].color.setHex(0xff3232);//c
+			}
+
+		}
+		function klikniecieKafelkaAI() {
+			if (LiczbaZastrzelonychWrogichMasztow < 20 && pAIuzupelnienie.PlanszaAI.Kratka[zapamietaneY][zapamietaneX] == 0) {
+				CzyMoznaGrac = 0;
+				materialTablicaKratekKomputera[zapamietaneX + zapamietaneY * 10].color.setHex(0xff3232);//c
+				if (KtoGra == 0) {
+
+					pozycjaKlockaDoObracania = zapamietaneX + zapamietaneY * 10;
+					szybkoscObracania = Math.PI / 20;//
+
+					tmpY = zapamietaneX;
+					tmpX = zapamietaneY;
+
+					if (pAI.PlanszaAI.Kratka[zapamietaneY][zapamietaneX] == 1) {
+						pAIuzupelnienie.PlanszaAI.Kratka[zapamietaneY][zapamietaneX] = 1;
+
+
+
+
+						var index = pAI.ZwrocIndeksStatkuZTablicaStatkow(tmpX, tmpY);
+						CzyZatopionyCalyStatek = 1;
+						for (var i = 0; i < pAI.CoToZaStatek(tmpX, tmpY); i++) //petla sprawdza czy zatopiono caly statek
+						{
+							var tmp02x = pAI.TablicaStatkow[index][i][0];
+							var tmp02y = pAI.TablicaStatkow[index][i][1];
+
+
+							if (pAIuzupelnienie.PlanszaAI.Kratka[tmp02x][tmp02y] == 0) {
+
+								CzyZatopionyCalyStatek = 0;
+								break;
+							}
+
+						}
+						if (CzyZatopionyCalyStatek == 1) {
+							alert("Trafiony, ZATOPIONY!");
+							for (var iii = 0; iii < pAI.CoToZaStatek(tmpX, tmpY); iii++) {
+								var tmp02x = pAI.TablicaStatkow[index][iii][0];
+								var tmp02y = pAI.TablicaStatkow[index][iii][1];
+							}
+
+						}
+						else
+							alert("Trafiony, PŁYNIE!");
+
+						CzyMoznaGrac = 1;
+						materialTablicaKratekKomputera[zapamietaneX + zapamietaneY * 10].color.setHex(0xffffff);//c
+						LiczbaZastrzelonychWrogichMasztow++;//*/
+
+						if (LiczbaZastrzelonychWrogichMasztow == 20) {
+							alert("WYGRALEŚ! Zestrzeliłeś wszystkie statki wroga!");
+							CzyMoznaGrac = 0;
+						}
+
+
+					}
+					else {
+						pAIuzupelnienie.PlanszaAI.Kratka[zapamietaneY][zapamietaneX] = 2;
+
+						var taa = setTimeout(function () { RuchKomputera() }, 1000);
+					}//*/
+				}
+			}
+		}//*/
+
+
+		function zjechanieKafelka() {
+			if (!AlPlaced) {
+				if (clicked) {
+					BresenhamLine(tmpY, tmpX, zapamietaneX, zapamietaneY, 0, 0xff9c00);
+				}
+				else {
+					if (pG.PlanszaG.Kratka[zapamietaneY][zapamietaneX] == 1) {
+						materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0xff9c00);
+					}
+					else if (pG.PlanszaG.Kratka[zapamietaneY][zapamietaneX] == 2) {
+						materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0xffffff);
+					}
+					else if (pG.PlanszaG.Kratka[zapamietaneY][zapamietaneX] == 0) {
+						materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0xffffff);
+					}
+				}
+			}
+		}//*/
+		function najechanieKafelka() {//wybor=0-stan poczatkowy|1-zaznacza|2-sprawdza czy mozna stawiac statki|3-ustawia statki
+			if (!AlPlaced) {
+				if (clicked) {
+					if (iloscStatkow[0] == 0) {
+						materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0xff3232);//c
+					}
+					else {
+						materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0x00a700);//z
+					}
+					if (BresenhamLine(tmpY, tmpX, zapamietaneX, zapamietaneY, 2, 0xff9c00) == false || iloscStatkow[Math.abs(tmpY - zapamietaneX + tmpX - zapamietaneY)] <= 0) {//koloruje na czerwono
+						BresenhamLine(tmpY, tmpX, zapamietaneX, zapamietaneY, 3, 0xff3232);//c
+					}
+					else {
+						BresenhamLine(tmpY, tmpX, zapamietaneX, zapamietaneY, 3, 0x00a700);	//koloruje na zielono
+					}
+				}
+				else {
+					if (pG.PlanszaG.Kratka[zapamietaneY][zapamietaneX] == 1 || pG.PlanszaG.Kratka[zapamietaneY][zapamietaneX] == 2) {
+						materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0xff3232);
+					}
+					else {
+						materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0x00a700);
+					}//*/
+				}
+			}
+		}
+		function klikniecieKafelka() {
+			if (!AlPlaced) {
+				if (!clicked) {
+					tmpY = zapamietaneX;
+					tmpX = zapamietaneY;
+					if (pG.PlanszaG.Kratka[tmpX][tmpY] != 1 && pG.PlanszaG.Kratka[tmpX][tmpY] != 2) {
+						if (iloscStatkow[0] == 0) {
+							materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0xff3232);//c
+						}
+						else {
+							materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0x00a700);//z
+						}
+						clicked = 1;
+
+					}//
+				}
+				else {
+					if (BresenhamLine(tmpY, tmpX, zapamietaneX, zapamietaneY, 2, 0xffffff) != false && iloscStatkow[Math.abs(tmpY - zapamietaneX + tmpX - zapamietaneY)] > 0) {//
+						BresenhamLine(tmpY, tmpX, zapamietaneX, zapamietaneY, 1, 0xff9c00);
+						pG.PlanszaG.Pieczatka(tmpX, tmpY);
+						iloscStatkow[Math.abs(tmpY - zapamietaneX + tmpX - zapamietaneY)]--;//po dodaniu odejmuje ilosc statkow
+						pG.PlanszaG.Kratka[tmpX][tmpY] = 1;
+						materialTablicaKratek[tmpY + tmpX * 10].color.setHex(0xff9c00);//p
+						if (iloscStatkow[0] == 0 && iloscStatkow[1] == 0 && iloscStatkow[2] == 0 && iloscStatkow[3] == 0) {
+							AlPlaced = 1;
+							alert("Statki zostały rozstawione.\nKliknij OK aby rozpocząć grę.");
+							pG.PlanszaG.UsunWszystkiePieczatki();
+							DotajKlockiGracza();
+							SchowajKafelki(true);
+							zapamietaneX = 0;
+							zapamietaneY = 0;
+							materialTablicaKratekKomputera[zapamietaneX + zapamietaneY * 10].opacity = 0.2;
+							//startGame2();
+						}
+					}
+					else {
+						BresenhamLine(tmpY, tmpX, zapamietaneX, zapamietaneY, 0, 0xff9c00);//p
+						if (pG.PlanszaG.Kratka[tmpX][tmpY] == 1) {
+							materialTablicaKratek[tmpY + tmpX * 10].color.setHex(0xff9c00);//p
+						}
+						else if (pG.PlanszaG.Kratka[tmpX][tmpY] == 2 || pG.PlanszaG.Kratka[tmpX][tmpY] == 0) {
+							if (pG.PlanszaG.Kratka[zapamietaneY][zapamietaneX] == 1 || pG.PlanszaG.Kratka[zapamietaneY][zapamietaneX] == 2) {
+								materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0xff3232);
+							}
+							else {
+								materialTablicaKratek[zapamietaneX + zapamietaneY * 10].color.setHex(0x00a700);
+							}
+						}
+
+					}
+					clicked = 0;
+				}
+
+
+			}
+		}//*/
+
+
+		function render() {
+			renderer.render(scene, camera);
+		}
+
+	</script>
+</body>
+
+</html>
